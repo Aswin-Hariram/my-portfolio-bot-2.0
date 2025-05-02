@@ -1,5 +1,3 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,9 +14,6 @@ from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 import PyPDF2
-
-app = Flask(__name__)
-CORS(app)
 
 def get_documents_from_pdf(pdf_path):
     """Loads and processes the PDF file to extract text."""
@@ -51,6 +46,7 @@ def create_chain(vectorStore):
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Answer the user's questions using only the relevant information from the context below. Be clear and concise. Do not use phrases like 'Based on the information provided' or 'According to the context'. Just provide the answer directly.\nContext: {context}"),
+        MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}")
     ])
 
@@ -61,53 +57,53 @@ def create_chain(vectorStore):
 
     retriever = vectorStore.as_retriever(search_kwargs={"k": 3})
 
+    retriever_prompt = ChatPromptTemplate.from_messages([
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("user", "{input}"),
+        ("user", "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation")
+    ])
+    
+    history_aware_retriever = create_history_aware_retriever(
+        llm=model,
+        retriever=retriever,
+        prompt=retriever_prompt
+    )
+
     retrieval_chain = create_retrieval_chain(
-        retriever,
+        history_aware_retriever,
         chain
     )
 
     return retrieval_chain
 
-# Initialize global variables
-pdf_path = 'document.pdf'
-docs = get_documents_from_pdf(pdf_path)
-vectorStore = create_db(docs)
-chain = create_chain(vectorStore)
+def process_chat(chain, question, chat_history):
+    """Process the chat with history to get the response."""
+    response = chain.invoke({
+        "chat_history": chat_history,
+        "input": question,
+    })
+    return response["answer"]
 
-@app.route('/')
-def home():
-    return 'Hello, World!'
+def main():
+    # Initialize the system
+    pdf_path = 'document.pdf'
+    docs = get_documents_from_pdf(pdf_path)
+    vectorStore = create_db(docs)
+    chain = create_chain(vectorStore)
+    chat_history = []
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.get_json()
-        if not data or 'question' not in data:
-            return jsonify({
-                'answer': None,
-                'status': 'error',
-                'message': 'Invalid request. Please provide a question'
-            }), 400
-        
-        question = data['question']
-        
-        # Process the chat message
-        response = chain.invoke({
-            "input": question
-        })
-        
-        return jsonify({
-            'answer': response["answer"],
-            'status': 'success'
-        })
+    print("Chat initialized. Type 'quit' to exit.")
     
-    except Exception as e:
-        return jsonify({
-            'answer': None,
-            'status': 'error',
-            'message': str(e)
-        }), 500
+    while True:
+        user_input = input("\nYou: ")
+        if user_input.lower() == 'quit':
+            break
+
+        response = process_chat(chain, user_input, chat_history)
+        chat_history.append(HumanMessage(content=user_input))
+        chat_history.append(AIMessage(content=response))
+        
+        print(f"\nAssistant: {response}")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Default to 8000 for local dev
-    app.run(host="0.0.0.0", port=port)
+    main()

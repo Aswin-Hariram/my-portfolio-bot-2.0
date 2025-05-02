@@ -2,3 +2,11 @@ Flask
 Flask-Cors
 gunicorn
 python-dotenv
+langchain-core
+langchain-community
+langchain_google_genai
+faiss-cpu
+PyPDF2
+chromadb
+requests
+google-cloud-aiplatform

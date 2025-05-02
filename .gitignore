@@ -62,3 +62,7 @@ coverage.xml
 
 # VSCode
 .vscode/
+
+# Environment variables
+.env
+.env.*
