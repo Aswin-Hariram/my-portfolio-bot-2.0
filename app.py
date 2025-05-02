@@ -4,79 +4,64 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores.faiss import FAISS
 from langchain.chains import create_retrieval_chain
 from langchain.docstore.document import Document
-from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.chains.history_aware_retriever import create_history_aware_retriever
-import PyPDF2
+
+from pdfminer.high_level import extract_text
 
 app = Flask(__name__)
 CORS(app)
 
+# In-memory chat history (for demo only)
+chat_history = []
+
 def get_documents_from_pdf(pdf_path):
-    """Loads and processes the PDF file to extract text."""
-    with open(pdf_path, "rb") as file:
-        reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-    
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=20
-    )
-    splitDocs = splitter.split_text(text)
-    documents = [Document(page_content=chunk) for chunk in splitDocs]
+    """Extracts text from a PDF file and splits it into documents."""
+    text = extract_text(pdf_path)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=20)
+    chunks = splitter.split_text(text)
+    documents = [Document(page_content=chunk, metadata={"source": f"Chunk {i + 1}"}) for i, chunk in enumerate(chunks)]
     return documents
 
-def create_db(docs):
-    """Creates a vector store from the documents."""
+def create_vector_store(docs):
+    """Creates a vector store using Gemini embeddings."""
     embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vectorStore = FAISS.from_documents(docs, embedding=embedding)
-    return vectorStore
+    vector_store = FAISS.from_documents(docs, embedding=embedding)
+    return vector_store
 
-def create_chain(vectorStore):
-    """Creates a retriever chain that will be used for chat."""
-    model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        temperature=0.9
-    )
+def create_qa_chain(vector_store):
+    """Creates a Gemini-based retrieval QA chain."""
+    model = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions using only the relevant information from the context below. Be clear and concise. Do not use phrases like 'Based on the information provided' or 'According to the context'. Just provide the answer directly.\nContext: {context}"),
+        ("system", 
+         "You're a helpful assistant. Answer the user's question strictly based on the context below.\n"
+         "If the requested information is not found in the provided context, please respond with: 'I apologize, I cannot find specific information. However, I can assist you with other questions about Mr. Aswin H'\n"
+         "Context:\n{context}"),
         ("user", "{input}")
     ])
 
-    chain = create_stuff_documents_chain(
-        llm=model,
-        prompt=prompt
-    )
-
-    retriever = vectorStore.as_retriever(search_kwargs={"k": 3})
-
-    retrieval_chain = create_retrieval_chain(
-        retriever,
-        chain
-    )
+    doc_chain = create_stuff_documents_chain(llm=model, prompt=prompt)
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+    retrieval_chain = create_retrieval_chain(retriever, doc_chain)
 
     return retrieval_chain
 
-# Initialize global variables
-pdf_path = 'document.pdf'
-docs = get_documents_from_pdf(pdf_path)
-vectorStore = create_db(docs)
-chain = create_chain(vectorStore)
+# Initialize the PDF and chain
+PDF_PATH = "document.pdf"
+docs = get_documents_from_pdf(PDF_PATH)
+vector_store = create_vector_store(docs)
+qa_chain = create_qa_chain(vector_store)
 
 @app.route('/')
-def home():
-    return 'Hello, World!'
+def index():
+    return 'PDF Q&A Server is running!'
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -86,21 +71,22 @@ def chat():
             return jsonify({
                 'answer': None,
                 'status': 'error',
-                'message': 'Invalid request. Please provide a question'
+                'message': 'Please provide a valid question.'
             }), 400
-        
+
         question = data['question']
+        chat_history.append(HumanMessage(content=question))
+
+        result = qa_chain.invoke({"input": question})
+        answer = result.get("answer", "I couldn’t find that in the document.")
         
-        # Process the chat message
-        response = chain.invoke({
-            "input": question
-        })
-        
+        chat_history.append(AIMessage(content=answer))
+
         return jsonify({
-            'answer': response["answer"],
+            'answer': answer,
             'status': 'success'
         })
-    
+
     except Exception as e:
         return jsonify({
             'answer': None,
@@ -109,5 +95,5 @@ def chat():
         }), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Default to 8000 for local dev
+    port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
