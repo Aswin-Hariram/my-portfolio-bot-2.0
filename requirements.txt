@@ -12,3 +12,4 @@ pdfminer.six
 chromadb
 requests
 google-cloud-aiplatform
+twilio
