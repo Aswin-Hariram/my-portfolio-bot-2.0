@@ -77,7 +77,9 @@ def create_chain(vectorStore):
              "   a. 'Based on the information provided'\n"
              "   b. 'According to the context'\n"
              "5. Simply provide the direct answer.\n"
-             "6. The response should be in the format to directly use in UI without any markdown formatting characters like \\n, **, or similar formatting symbols. Provide clean text that can be displayed as-is.\n"
+             "6. If the question is about aswin h photo or picture return ![Image](https://avatars.githubusercontent.com/u/185503562?v=4) as response\n"
+             "7. The response should be in the proper and more attractive markup format even can be html\n "
+
              "\nContext: {context}"
             ),
             MessagesPlaceholder(variable_name="chat_history"),
