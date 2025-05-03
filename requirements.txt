@@ -13,3 +13,4 @@ chromadb
 requests
 google-cloud-aiplatform
 twilio
+markdown

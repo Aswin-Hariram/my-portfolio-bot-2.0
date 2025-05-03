@@ -64,25 +64,26 @@ def create_chain(vectorStore):
         )
 
         prompt = ChatPromptTemplate.from_messages([
-    ("system", 
-     "1. Answer the user's questions using only the relevant information from the context.\n"
-     "2. Focus on personal details such as:\n"
-     "   a. Education\n"
-     "   b. Location\n"
-     "   c. Work experience\n"
-     "   d. Skills\n"
-     "3. Be clear and concise in your responses.\n"
-     "4. Do not use phrases like:\n"
-     "   a. 'Based on the information provided'\n"
-     "   b. 'According to the context'\n"
-     "5. Simply provide the direct answer.\n"
-     "6. If the user asks who you are or similar identity-related questions:\n"
-     "   a. Respond that you are an AI assistant designed to answer questions about Mr. Aswin H based on his portfolio information.\n"
-     "\nContext: {context}"
-    ),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("user", "{input}")
-])
+     ("system", 
+             "1. Answer the user's questions using only the relevant information from the context.\n"
+             "2. Focus on personal details such as:\n"
+             "   a. Education\n"
+             "   b. Location\n"
+             "   c. Work experience\n"
+             "   d. Skills\n"
+             "3. Be clear and concise in your responses.\n"
+             "4. Do not use phrases like:\n"
+             "   a. 'Based on the information provided'\n"
+             "   b. 'According to the context'\n"
+             "5. Simply provide the direct answer.\n"
+             "6. If the user asks who you are or similar identity-related questions:\n"
+             "   a. Respond that you are an AI assistant designed to answer questions about Mr. Aswin H based on his portfolio information.\n"
+             "7. The response should be in the format to directly use in UI without any markdown formatting characters like \\n, **, or similar formatting symbols. Provide clean text that can be displayed as-is.\n"
+             "\nContext: {context}"
+            ),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("user", "{input}")
+        ])
 
         chain = create_stuff_documents_chain(
             llm=model,
@@ -204,3 +205,49 @@ def reset_chat_history():
             'status': 'error',
             'message': str(e)
         }), 500
+
+# Add a new function to format responses for UI
+def format_response_for_ui(text):
+    """Format the response text for proper UI display."""
+    if not text:
+        return ""
+    
+    # Replace markdown formatting with HTML equivalents if needed
+    formatted_text = text.strip()
+    
+    # Handle escaped newlines that might come from the model
+    # Preserve actual newlines for multiline display
+    formatted_text = formatted_text.replace("/n", "\n")
+    formatted_text = formatted_text.replace("\\n", "\n")
+    
+    # Process each line separately to handle multiple spaces
+    lines = formatted_text.split("\n")
+    processed_lines = []
+    for line in lines:
+        # Remove multiple spaces within each line
+        processed_line = " ".join(line.split())
+        processed_lines.append(processed_line)
+    
+    # Rejoin with newlines
+    formatted_text = "\n".join(processed_lines)
+    
+    # Remove markdown formatting characters
+    markdown_chars = ["*", "_", "#", "`", ">", "-", "+"]
+    for char in markdown_chars:
+        formatted_text = formatted_text.replace(char, "")
+    
+    # Specifically handle "**" bold formatting
+    formatted_text = formatted_text.replace("**", "")
+    
+    # Handle any special HTML entities if needed
+    html_entities = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    }
+    for entity, replacement in html_entities.items():
+        formatted_text = formatted_text.replace(entity, replacement)
+    
+    return formatted_text
