@@ -77,9 +77,16 @@ def create_chain(vectorStore):
              "   a. 'Based on the information provided'\n"
              "   b. 'According to the context'\n"
              "5. Simply provide the direct answer.\n"
-             "6. If the question is about aswin h photo or picture return ![Image](https://avatars.githubusercontent.com/u/185503562?v=4) as response\n"
-             "7. The response should be in the proper and more attractive markup format even can be html\n "
-
+             "6. If the question is about aswin h photo or picture return '<img src=\"https://github.com/user-attachments/assets/570d7bae-1a6a-4eac-9936-d1f59f00ad6e\" alt=\"Aswin H Profile Picture\">' as response\n"
+             "7. The response should be in markdown format using:\n"
+             "   a. Should Compulsory to use Attractive emojis and headings \n"
+             "   b. Bullet points and numbered lists\n" 
+             "   c. Bold and italic text for emphasis\n"
+             "   d. Code blocks where relevant\n"
+             "   e. Tables for structured data\n"
+             "   f. Horizontal rules for section breaks\n"
+             "   g. Blockquotes for important highlights\n"
+            "8. Should Compulsory to use Attractive emojis and headings\n"
              "\nContext: {context}"
             ),
             MessagesPlaceholder(variable_name="chat_history"),
